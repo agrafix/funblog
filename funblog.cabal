@@ -1,0 +1,37 @@
+name:                funblog
+version:             0.1.0.0
+synopsis:            A simple yet powerfull blog software
+homepage:            http://webhaskell.net
+license:             Apache-2.0
+license-file:        LICENSE
+author:              Alexander Thiemann <mail@agrafix.net>
+maintainer:          mail@agrafix.net
+copyright:           (c) 2014 Alexander Thiemann
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable funblog
+  main-is:             Bootstrap.hs
+  -- other-modules:       
+  -- other-extensions:    
+  build-depends:       base >=4.6 && <4.7,
+                       Spock >=0.4.2,
+                       persistent ==1.3.*,
+                       persistent-postgresql ==1.3.*,
+                       persistent-template ==1.3.*,
+                       configurator ==0.2.*,
+                       bytestring ==0.10.*,
+                       text >=0.11.3.1 && <1.2,
+                       time ==1.4.*,
+                       monad-logger ==0.3.4.*,
+                       cryptohash ==0.11.*,
+                       aeson ==0.6.*,
+                       word8,
+                       random,
+                       mtl,
+                       resourcet,
+                       http-types ==0.8.*
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options: -fwarn-unused-imports
