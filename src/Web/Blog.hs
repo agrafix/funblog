@@ -9,12 +9,13 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Resource
 import Database.Persist.Postgresql
 import Web.Spock
+import Web.Spock.Auth
 
 import qualified Network.HTTP.Types.Status as Http
 import qualified Data.Configurator as C
 
-type BlogApp = SpockM Connection SessionId () ()
-type BlogAction a = SpockAction Connection SessionId () a
+type BlogApp = SpockM Connection (VisitorSession () SessionId) () ()
+type BlogAction a = SpockAction Connection (VisitorSession () SessionId) () a
 
 parseConfig :: FilePath -> IO (ConnectionString, Int)
 parseConfig cfgFile =
@@ -30,7 +31,7 @@ runBlog connStr port =
        spock port sessCfg (PCConduitPool pool) () blogApp
     where
       sessCfg =
-          SessionCfg "funblog" (5 * 60 * 60) 40
+          authSessCfg (AuthCfg (5 * 60 * 60) ())
 
 runSQL action =
     runQuery $ \conn ->
@@ -50,16 +51,16 @@ blogApp =
                case loginRes of
                  Just userId ->
                      do sid <- runSQL $ createSession userId
-                        authedUser userId (const sid)
+                        markAsLoggedIn sid
                         json (CommonSuccess "Login okay!")
                  Nothing ->
                      json (CommonError "Login failed.")
        userR GET [] "/logout" $ \(userId, _) ->
            do runSQL $ killSessions userId
-              unauthCurrent
+              markAsGuest
 
 userR =
-    authed http403 (runSQL . loadUser) (checkRights)
+    userRoute http403 (runSQL . loadUser) (checkRights)
     where
       checkRights :: (UserId, User) -> [UserRights] -> BlogAction Bool
       checkRights (_, user) rightList =
@@ -78,6 +79,6 @@ userR =
                            "Not enough rights to view the page"
                        NotLoggedIn ->
                            "You need to be logged in to view the page"
-                       NoSession ->
-                           "No valid session found"
+                       NotValidUser ->
+                           "No valid user found"
              json (CommonError txt)
