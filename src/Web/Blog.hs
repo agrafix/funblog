@@ -5,30 +5,46 @@ import Model.CoreTypes
 import Model.ResponseTypes
 import Web.Actions.User
 
+import Text.HSmarty
 import Control.Monad.Logger
+import Control.Monad.Trans
 import Control.Monad.Trans.Resource
-import Database.Persist.Postgresql
+import Database.Persist.Postgresql hiding (get)
 import Web.Spock
 import Web.Spock.Auth
+import Network.Wai.Middleware.Static
 
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Network.HTTP.Types.Status as Http
 import qualified Data.Configurator as C
+import qualified Data.HashMap.Strict as HM
 
-type BlogApp = SpockM Connection (VisitorSession () SessionId) () ()
-type BlogAction a = SpockAction Connection (VisitorSession () SessionId) () a
+type BlogApp = SpockM Connection (VisitorSession () SessionId) BlogCfg ()
+type BlogAction a = SpockAction Connection (VisitorSession () SessionId) BlogCfg a
 
-parseConfig :: FilePath -> IO (ConnectionString, Int)
+data BlogCfg
+   = BlogCfg
+   { bcfg_conn :: ConnectionString
+   , bcfg_port :: Int
+   , bcfg_name :: T.Text
+   , bcfg_desc :: T.Text
+   }
+
+parseConfig :: FilePath -> IO BlogCfg
 parseConfig cfgFile =
     do cfg <- C.load [C.Required "blog.cfg"]
        connStr <- C.require cfg "pgString"
        port <- C.require cfg "port"
-       return (connStr, port)
+       name <- C.require cfg "blogName"
+       desc <- C.require cfg "blogDescription"
+       return (BlogCfg connStr port name desc)
 
-runBlog :: ConnectionString -> Int -> IO ()
-runBlog connStr port =
-    do pool <- createPostgresqlPool connStr 5
+runBlog :: BlogCfg -> IO ()
+runBlog bcfg =
+    do pool <- createPostgresqlPool (bcfg_conn bcfg) 5
        runNoLoggingT $ runSqlPool (runMigration migrateCore) pool
-       spock port sessCfg (PCConduitPool pool) () blogApp
+       spock (bcfg_port bcfg) sessCfg (PCConduitPool pool) bcfg blogApp
     where
       sessCfg =
           authSessCfg (AuthCfg (5 * 60 * 60) ())
@@ -37,9 +53,28 @@ runSQL action =
     runQuery $ \conn ->
         runResourceT $ runNoLoggingT $ runSqlConn action conn
 
+runTpl :: FilePath -> ParamMap -> BlogAction ()
+runTpl fp m =
+    do bcfg <- getState
+       let coreHM =
+               HM.fromList [ ("blogName", mkParam (bcfg_name bcfg))
+                           , ("blogDesc", mkParam (bcfg_desc bcfg))
+                           ]
+       res <- liftIO $ renderTemplate fp (coreHM `HM.union` m)
+       case res of
+         Left err ->
+             do status Http.status403
+                liftIO $ putStrLn $ "Template Error: " ++ show err
+                text "Internal Server Error!"
+         Right h ->
+             html (TL.fromStrict h)
+
 blogApp :: BlogApp
 blogApp =
-    do post "/register" $
+    do middleware (staticPolicy (addBase "static"))
+       get "/" $
+           runTpl "templates/main.tpl" HM.empty
+       post "/register" $
             do username <- param "username"
                email <- param "email"
                password <- param "password"

@@ -1,5 +1,5 @@
 import Web.Blog
 
 main =
-    do (connStr, port) <- parseConfig "blog.ini"
-       runBlog connStr port
+    do cfg <- parseConfig "blog.ini"
+       runBlog cfg
