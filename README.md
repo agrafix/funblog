@@ -1,6 +1,8 @@
 funblog
 =======
 
+[![Build Status](https://drone.io/github.com/agrafix/funblog/status.png)](https://drone.io/github.com/agrafix/funblog/latest)
+
 # Intro
 
 This is a simple blog software written in Haskell to demonstrate how to use the webframework [Spock](http://github.com/agrafix/Spock). The project has two goals:
