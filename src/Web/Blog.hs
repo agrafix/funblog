@@ -15,7 +15,6 @@ import Web.Spock.Auth
 import Network.Wai.Middleware.Static
 
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import qualified Network.HTTP.Types.Status as Http
 import qualified Data.Configurator as C
 import qualified Data.HashMap.Strict as HM
@@ -63,11 +62,11 @@ runTpl fp m =
        res <- liftIO $ renderTemplate fp (coreHM `HM.union` m)
        case res of
          Left err ->
-             do status Http.status403
+             do setStatus Http.status403
                 liftIO $ putStrLn $ "Template Error: " ++ show err
                 text "Internal Server Error!"
          Right h ->
-             html (TL.fromStrict h)
+             html h
 
 blogApp :: BlogApp
 blogApp =
@@ -75,13 +74,13 @@ blogApp =
        get "/" $
            runTpl "templates/main.tpl" HM.empty
        post "/register" $
-            do username <- param "username"
-               email <- param "email"
-               password <- param "password"
+            do Just username <- param "username"
+               Just email <- param "email"
+               Just password <- param "password"
                (runSQL $ registerUser username email password) >>= json
        post "/login" $
-            do username <- param "username"
-               password <- param "password"
+            do Just username <- param "username"
+               Just password <- param "password"
                loginRes <- runSQL $ loginUser username password
                case loginRes of
                  Just userId ->
@@ -107,7 +106,7 @@ userR =
                                 ]
                else return True
       http403 ty =
-          do status Http.status403
+          do setStatus Http.status403
              let txt =
                      case ty of
                        NotEnoughRights ->

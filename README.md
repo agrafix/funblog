@@ -1,7 +1,7 @@
 funblog
 =======
 
-[![Build Status](https://drone.io/github.com/agrafix/funblog/status.png)](https://drone.io/github.com/agrafix/funblog/latest)
+[![Build Status](https://travis-ci.org/agrafix/funblog.svg)](https://travis-ci.org/agrafix/funblog)
 
 # Intro
 
