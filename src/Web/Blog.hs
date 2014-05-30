@@ -9,7 +9,7 @@ import Text.HSmarty
 import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Resource
-import Database.Persist.Postgresql hiding (get)
+import Database.Persist.Sqlite hiding (get)
 import Web.Spock
 import Web.Spock.Auth
 import Network.Wai.Middleware.Static
@@ -24,7 +24,7 @@ type BlogAction a = SpockAction Connection (VisitorSession () SessionId) BlogCfg
 
 data BlogCfg
    = BlogCfg
-   { bcfg_conn :: ConnectionString
+   { bcfg_db   :: T.Text
    , bcfg_port :: Int
    , bcfg_name :: T.Text
    , bcfg_desc :: T.Text
@@ -33,15 +33,15 @@ data BlogCfg
 parseConfig :: FilePath -> IO BlogCfg
 parseConfig cfgFile =
     do cfg <- C.load [C.Required "blog.cfg"]
-       connStr <- C.require cfg "pgString"
+       db <- C.require cfg "db"
        port <- C.require cfg "port"
        name <- C.require cfg "blogName"
        desc <- C.require cfg "blogDescription"
-       return (BlogCfg connStr port name desc)
+       return (BlogCfg db port name desc)
 
 runBlog :: BlogCfg -> IO ()
 runBlog bcfg =
-    do pool <- createPostgresqlPool (bcfg_conn bcfg) 5
+    do pool <- createSqlitePool (bcfg_db bcfg) 5
        runNoLoggingT $ runSqlPool (runMigration migrateCore) pool
        spock (bcfg_port bcfg) sessCfg (PCConduitPool pool) bcfg blogApp
     where
