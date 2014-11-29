@@ -32,7 +32,7 @@ data BlogCfg
 
 parseConfig :: FilePath -> IO BlogCfg
 parseConfig cfgFile =
-    do cfg <- C.load [C.Required "blog.cfg"]
+    do cfg <- C.load [C.Required cfgFile]
        db <- C.require cfg "db"
        port <- C.require cfg "port"
        name <- C.require cfg "blogName"
