@@ -18,9 +18,9 @@ import qualified Data.Text.Encoding as T
 
 randomBytes:: Int -> StdGen -> [Word8]
 randomBytes 0 _ = []
-randomBytes count g =
+randomBytes ct g =
     let (value, nextG) = next g
-    in fromIntegral value:randomBytes (count - 1) nextG
+    in fromIntegral value:randomBytes (ct - 1) nextG
 
 randomBS :: Int -> StdGen -> BS.ByteString
 randomBS len g =
@@ -77,5 +77,5 @@ registerUser username email password =
              do g <- liftIO $ getStdGen
                 let salt = randomBS 512 g
                     hash = hashPassword password salt
-                insert (User username hash salt email False False)
+                _ <- insert (User username hash salt email False False)
                 return (CommonSuccess "Signup complete. You may now login.")

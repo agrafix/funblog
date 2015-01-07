@@ -4,6 +4,7 @@ module Model.ResponseTypes where
 import Data.Aeson.TH
 import qualified Data.Text as T
 
+dropLbl :: Int -> Options
 dropLbl i =
     defaultOptions { fieldLabelModifier = drop i }
 

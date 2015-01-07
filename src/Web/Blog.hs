@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
 module Web.Blog where
 
 import Model.CoreTypes
@@ -10,8 +11,7 @@ import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Resource
 import Database.Persist.Sqlite hiding (get)
-import Web.Spock
-import Web.Spock.Auth
+import Web.Spock.Safe hiding (SessionId)
 import Network.Wai.Middleware.Static
 
 import qualified Data.Text as T
@@ -19,8 +19,9 @@ import qualified Network.HTTP.Types.Status as Http
 import qualified Data.Configurator as C
 import qualified Data.HashMap.Strict as HM
 
-type BlogApp = SpockM Connection (VisitorSession () SessionId) BlogCfg ()
-type BlogAction a = SpockAction Connection (VisitorSession () SessionId) BlogCfg a
+type SessionVal = Maybe SessionId
+type BlogApp = SpockM SqlBackend SessionVal BlogCfg ()
+type BlogAction a = SpockAction SqlBackend SessionVal BlogCfg a
 
 data BlogCfg
    = BlogCfg
@@ -41,13 +42,20 @@ parseConfig cfgFile =
 
 runBlog :: BlogCfg -> IO ()
 runBlog bcfg =
-    do pool <- createSqlitePool (bcfg_db bcfg) 5
+    do pool <- runNoLoggingT $ createSqlitePool (bcfg_db bcfg) 5
        runNoLoggingT $ runSqlPool (runMigration migrateCore) pool
-       spock (bcfg_port bcfg) sessCfg (PCConduitPool pool) bcfg blogApp
+       runSpock (bcfg_port bcfg) $ spock sessCfg (PCPool pool) bcfg blogApp
     where
       sessCfg =
-          authSessCfg (AuthCfg (5 * 60 * 60) ())
+          SessionCfg
+          { sc_cookieName = "funblog"
+          , sc_sessionTTL = 5 * 60 * 50
+          , sc_sessionIdEntropy = 40
+          , sc_emptySession = Nothing
+          , sc_persistCfg = Nothing
+          }
 
+runSQL :: (HasSpock m, SpockConn m ~ SqlBackend) => SqlPersistT (NoLoggingT (ResourceT IO)) a -> m a
 runSQL action =
     runQuery $ \conn ->
         runResourceT $ runNoLoggingT $ runSqlConn action conn
@@ -85,34 +93,26 @@ blogApp =
                case loginRes of
                  Just userId ->
                      do sid <- runSQL $ createSession userId
-                        markAsLoggedIn sid
+                        writeSession (Just sid)
                         json (CommonSuccess "Login okay!")
                  Nothing ->
                      json (CommonError "Login failed.")
-       userR GET [] "/logout" $ \(userId, _) ->
+       get "/logout" $ requireUser $ \(userId, _) ->
            do runSQL $ killSessions userId
-              markAsGuest
+              writeSession Nothing
 
-userR =
-    userRoute http403 (runSQL . loadUser) (checkRights)
-    where
-      checkRights :: (UserId, User) -> [UserRights] -> BlogAction Bool
-      checkRights (_, user) rightList =
-          if "admin" `elem` rightList
-          then return $ userIsAdmin user
-          else if "author" `elem` rightList
-               then return $ or [ userIsAdmin user
-                                , userIsAuthor user
-                                ]
-               else return True
-      http403 ty =
-          do setStatus Http.status403
-             let txt =
-                     case ty of
-                       NotEnoughRights ->
-                           "Not enough rights to view the page"
-                       NotLoggedIn ->
-                           "You need to be logged in to view the page"
-                       NotValidUser ->
-                           "No valid user found"
-             json (CommonError txt)
+requireUser :: ((UserId, User) -> BlogAction a) -> BlogAction a
+requireUser action =
+    do sess <- readSession
+       case sess of
+         Nothing ->
+             do setStatus Http.status403
+                json (CommonError "Not logged in")
+         Just sid ->
+             do mUser <- runSQL $ loadUser sid
+                case mUser of
+                  Nothing ->
+                      do setStatus Http.status403
+                         json (CommonError "Invalid user")
+                  Just userTuple ->
+                      action userTuple

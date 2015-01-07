@@ -35,4 +35,4 @@ executable funblog
                        wai-middleware-static ==0.6.*
   hs-source-dirs:      src
   default-language:    Haskell2010
-  ghc-options: -fWall
+  ghc-options: -Wall
