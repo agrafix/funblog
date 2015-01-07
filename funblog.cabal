@@ -1,6 +1,7 @@
 name:                funblog
 version:             0.2.0.0
-synopsis:            A simple yet powerfull blog software
+synopsis:            Blog written in Haskell
+description:         A simple yet powerfull blog software
 homepage:            https://github.com/agrafix/funblog
 license:             Apache-2.0
 license-file:        LICENSE
