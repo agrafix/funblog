@@ -5,12 +5,21 @@ funblog
 
 # Intro
 
-This is a simple blog software written in Haskell to demonstrate how to use the webframework [Spock](http://github.com/agrafix/Spock). The project has two goals:
+This is a simple blog software written in Haskell to demonstrate how to
+use the web framework [Spock](http://github.com/agrafix/Spock). It
+(will) provide(s) examples for:
 
-* Provide an example of how to write haskell web applications
-* Provide a simple and robust blogging software written in Haskell
+* Routing
+* Using template engines
+* Writing a REST API (JSON)
+* Working with Forms
+* Using a database
+* Session management
+* Background-Workers
+* Authentification
 
-It will take some time to arrive at the second goal, but I hope we'll get there someday.
+This repository also provides the material for my upcoming talk at
+[BobKonf 2015 Berlin](http://bobkonf.de/2015/thiemann.html) (German).
 
 # Setup
 
@@ -22,7 +31,7 @@ It will take some time to arrive at the second goal, but I hope we'll get there 
 
 # License
 
-Copyright 2014 Alexander Thiemann
+Copyright 2014 - 2015 Alexander Thiemann
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
