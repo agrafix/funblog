@@ -6,23 +6,23 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Model.CoreTypes where
 
 import Database.Persist.TH
 import Data.Time
 
 import qualified Data.Text as T
-import qualified Data.ByteString as BS
 
 share [mkPersist sqlSettings, mkMigrate "migrateCore"] [persistLowerCase|
 Session
      validUntil UTCTime
      userId UserId
      deriving Show
-User
+User json
      name T.Text
-     password BS.ByteString
-     salt BS.ByteString
+     password T.Text
+     salt T.Text
      email T.Text
      isAuthor Bool
      isAdmin Bool

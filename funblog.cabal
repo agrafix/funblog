@@ -32,7 +32,9 @@ executable funblog
                        resourcet,
                        unordered-containers,
                        http-types ==0.8.*,
-                       wai-middleware-static ==0.6.*
+                       wai-middleware-static ==0.6.*,
+                       stm,
+                       base16-bytestring ==0.1.*
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options: -Wall

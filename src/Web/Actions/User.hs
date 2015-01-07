@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Actions.User where
 
+import Web.Utils
 import Model.ResponseTypes
 import Model.CoreTypes
 
@@ -15,6 +16,7 @@ import qualified Data.ByteString as BS
 import qualified Crypto.Hash.SHA512 as SHA
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+
 
 randomBytes:: Int -> StdGen -> [Word8]
 randomBytes 0 _ = []
@@ -46,7 +48,7 @@ loginUser username password =
        case mUserU `mplus` mUserE of
          Just userEntity ->
              let user = entityVal userEntity
-             in if userPassword user == hashPassword password (userSalt user)
+             in if userPassword user == (makeHex $ hashPassword password (decodeHex $ userSalt user))
                 then return $ Just (entityKey userEntity)
                 else return Nothing
          Nothing ->
@@ -77,5 +79,5 @@ registerUser username email password =
              do g <- liftIO $ getStdGen
                 let salt = randomBS 512 g
                     hash = hashPassword password salt
-                _ <- insert (User username hash salt email False False)
+                _ <- insert (User username (makeHex hash) (makeHex salt) email False False)
                 return (CommonSuccess "Signup complete. You may now login.")

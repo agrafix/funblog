@@ -1,5 +1,5 @@
 {include file='templates/header.tpl' title=$blogName}
-<div class="blog-header">
+      <div class="blog-header">
         <h1 class="blog-title">{$blogName}</h1>
         <p class="lead blog-description">{$blogDesc}</p>
       </div>
@@ -97,9 +97,13 @@
             </ol>
           </div>
           <div class="sidebar-module">
-            <h4>Elsewhere</h4>
+            <h4>Meta</h4>
             <ol class="list-unstyled">
-              <li><a href="#">GitHub</a></li>
+              {if $user}
+              <li><a href="/logout">Sign out</a></li>
+              {else}
+              <li><a href="/login">Login</a></li>
+              {/if}
               <li><a href="#">Twitter</a></li>
               <li><a href="#">Facebook</a></li>
             </ol>

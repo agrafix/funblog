@@ -7,6 +7,7 @@ import Model.ResponseTypes
 import Web.Actions.User
 
 import Text.HSmarty
+import Control.Concurrent.STM
 import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Resource
@@ -20,8 +21,14 @@ import qualified Data.Configurator as C
 import qualified Data.HashMap.Strict as HM
 
 type SessionVal = Maybe SessionId
-type BlogApp = SpockM SqlBackend SessionVal BlogCfg ()
-type BlogAction a = SpockAction SqlBackend SessionVal BlogCfg a
+type BlogApp = SpockM SqlBackend SessionVal BlogState ()
+type BlogAction a = SpockAction SqlBackend SessionVal BlogState a
+
+data BlogState
+   = BlogState
+   { bs_cfg :: BlogCfg
+   , bs_templates :: TVar (HM.HashMap FilePath SmartyCtx)
+   }
 
 data BlogCfg
    = BlogCfg
@@ -44,7 +51,8 @@ runBlog :: BlogCfg -> IO ()
 runBlog bcfg =
     do pool <- runNoLoggingT $ createSqlitePool (bcfg_db bcfg) 5
        runNoLoggingT $ runSqlPool (runMigration migrateCore) pool
-       runSpock (bcfg_port bcfg) $ spock sessCfg (PCPool pool) bcfg blogApp
+       newHm <- newTVarIO HM.empty
+       runSpock (bcfg_port bcfg) $ spock sessCfg (PCPool pool) (BlogState bcfg newHm) blogApp
     where
       sessCfg =
           SessionCfg
@@ -60,14 +68,27 @@ runSQL action =
     runQuery $ \conn ->
         runResourceT $ runNoLoggingT $ runSqlConn action conn
 
-runTpl :: FilePath -> ParamMap -> BlogAction ()
-runTpl fp m =
-    do bcfg <- getState
-       let coreHM =
+runTpl :: Maybe User -> FilePath -> ParamMap -> BlogAction ()
+runTpl mUser fp m =
+    do blogSt <- getState
+       let bcfg = bs_cfg blogSt
+           coreHM =
                HM.fromList [ ("blogName", mkParam (bcfg_name bcfg))
                            , ("blogDesc", mkParam (bcfg_desc bcfg))
+                           , ("user", mkParam mUser)
                            ]
-       res <- liftIO $ renderTemplate fp (coreHM `HM.union` m)
+       ctxHm <-
+           liftIO $ atomically $ readTVar (bs_templates blogSt)
+       renderCtx <-
+           case HM.lookup fp ctxHm of
+             Nothing ->
+                 liftIO $
+                 do newCtx <- prepareTemplate fp
+                    atomically $ modifyTVar (bs_templates blogSt) (HM.insert fp newCtx)
+                    return newCtx
+             Just ctx ->
+                 return ctx
+       res <- liftIO $ applyTemplate renderCtx (coreHM `HM.union` m)
        case res of
          Left err ->
              do setStatus Http.status403
@@ -80,7 +101,9 @@ blogApp :: BlogApp
 blogApp =
     do middleware (staticPolicy (addBase "static"))
        get "/" $
-           runTpl "templates/main.tpl" HM.empty
+           runTpl Nothing "templates/main.tpl" HM.empty
+       get "/login" $
+           runTpl Nothing "templates/login.tpl" $ HM.fromList [("error", mkParam (Nothing :: Maybe String))]
        post "/register" $
             do Just username <- param "username"
                Just email <- param "email"
@@ -100,6 +123,7 @@ blogApp =
        get "/logout" $ requireUser $ \(userId, _) ->
            do runSQL $ killSessions userId
               writeSession Nothing
+              redirect "/"
 
 requireUser :: ((UserId, User) -> BlogAction a) -> BlogAction a
 requireUser action =
