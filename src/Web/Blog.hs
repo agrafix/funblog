@@ -5,20 +5,24 @@ module Web.Blog where
 import Model.CoreTypes
 import Model.ResponseTypes
 import Web.Actions.User
+import Web.Forms.Login
+import Web.Utils
+import Web.Views.Home
+import Web.Views.Login
+import Web.Views.Site
 
-import Text.HSmarty
-import Control.Concurrent.STM
 import Control.Monad.Logger
-import Control.Monad.Trans
 import Control.Monad.Trans.Resource
+import Data.Monoid
 import Database.Persist.Sqlite hiding (get)
-import Web.Spock.Safe hiding (SessionId)
 import Network.Wai.Middleware.Static
-
+import Text.Blaze.Html (Html)
+import Text.Digestive.Bootstrap (renderForm)
+import Web.Spock.Digestive
+import Web.Spock.Safe hiding (SessionId)
+import qualified Data.Configurator as C
 import qualified Data.Text as T
 import qualified Network.HTTP.Types.Status as Http
-import qualified Data.Configurator as C
-import qualified Data.HashMap.Strict as HM
 
 type SessionVal = Maybe SessionId
 type BlogApp = SpockM SqlBackend SessionVal BlogState ()
@@ -27,7 +31,6 @@ type BlogAction a = SpockAction SqlBackend SessionVal BlogState a
 data BlogState
    = BlogState
    { bs_cfg :: BlogCfg
-   , bs_templates :: TVar (HM.HashMap FilePath SmartyCtx)
    }
 
 data BlogCfg
@@ -51,8 +54,7 @@ runBlog :: BlogCfg -> IO ()
 runBlog bcfg =
     do pool <- runNoLoggingT $ createSqlitePool (bcfg_db bcfg) 5
        runNoLoggingT $ runSqlPool (runMigration migrateCore) pool
-       newHm <- newTVarIO HM.empty
-       runSpock (bcfg_port bcfg) $ spock sessCfg (PCPool pool) (BlogState bcfg newHm) blogApp
+       runSpock (bcfg_port bcfg) $ spock sessCfg (PCPool pool) (BlogState bcfg) blogApp
     where
       sessCfg =
           SessionCfg
@@ -68,58 +70,51 @@ runSQL action =
     runQuery $ \conn ->
         runResourceT $ runNoLoggingT $ runSqlConn action conn
 
-runTpl :: Maybe User -> FilePath -> ParamMap -> BlogAction ()
-runTpl mUser fp m =
+mkSite :: Maybe User -> (SiteView -> Html) -> BlogAction ()
+mkSite mUser content =
     do blogSt <- getState
-       let bcfg = bs_cfg blogSt
-           coreHM =
-               HM.fromList [ ("blogName", mkParam (bcfg_name bcfg))
-                           , ("blogDesc", mkParam (bcfg_desc bcfg))
-                           , ("user", mkParam mUser)
-                           ]
-       ctxHm <-
-           liftIO $ atomically $ readTVar (bs_templates blogSt)
-       renderCtx <-
-           case HM.lookup fp ctxHm of
-             Nothing ->
-                 liftIO $
-                 do newCtx <- prepareTemplate fp
-                    atomically $ modifyTVar (bs_templates blogSt) (HM.insert fp newCtx)
-                    return newCtx
-             Just ctx ->
-                 return ctx
-       res <- liftIO $ applyTemplate renderCtx (coreHM `HM.union` m)
-       case res of
-         Left err ->
-             do setStatus Http.status403
-                liftIO $ putStrLn $ "Template Error: " ++ show err
-                text "Internal Server Error!"
-         Right h ->
-             html h
+       let cfg = bs_cfg blogSt
+           sv =
+               SiteView
+               { sv_blogName = bcfg_name cfg
+               , sv_blogDesc = bcfg_desc cfg
+               , sv_user = mUser
+               }
+       blaze $ siteView sv (content sv)
+
+mkSite' :: Maybe User -> Html -> BlogAction ()
+mkSite' mUser content = mkSite mUser (const content)
+
+getpost url action =
+    do get url action
+       post url action
 
 blogApp :: BlogApp
 blogApp =
     do middleware (staticPolicy (addBase "static"))
        get "/" $
-           runTpl Nothing "templates/main.tpl" HM.empty
-       get "/login" $
-           runTpl Nothing "templates/login.tpl" $ HM.fromList [("error", mkParam (Nothing :: Maybe String))]
+           mkSite Nothing (\sv -> homeView sv)
+       getpost "/login" $
+           do f <- runForm "loginForm" loginForm
+              case f of
+                (view, Nothing) ->
+                    mkSite' Nothing (loginView Nothing $ renderForm loginFormSpec view)
+                (view, Just loginReq) ->
+                    do loginRes <- runSQL $ loginUser (lr_user loginReq) (lr_password loginReq)
+                       case loginRes of
+                         Just userId ->
+                             do sid <- runSQL $ createSession userId
+                                writeSession (Just sid)
+                                redirect "/"
+                         Nothing ->
+                             mkSite' Nothing (loginView (Just "Invalid login credentials!") $ renderForm loginFormSpec view)
+       get "/about" $
+           mkSite Nothing mempty
        post "/register" $
             do Just username <- param "username"
                Just email <- param "email"
                Just password <- param "password"
                (runSQL $ registerUser username email password) >>= json
-       post "/login" $
-            do Just username <- param "username"
-               Just password <- param "password"
-               loginRes <- runSQL $ loginUser username password
-               case loginRes of
-                 Just userId ->
-                     do sid <- runSQL $ createSession userId
-                        writeSession (Just sid)
-                        json (CommonSuccess "Login okay!")
-                 Nothing ->
-                     json (CommonError "Login failed.")
        get "/logout" $ requireUser $ \(userId, _) ->
            do runSQL $ killSessions userId
               writeSession Nothing
