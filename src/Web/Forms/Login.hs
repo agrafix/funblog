@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Forms.Login where
 
+import Web.Forms.Common
+
 import Control.Applicative
 import Text.Blaze.Html (Html)
 import Text.Digestive
@@ -15,8 +17,8 @@ data LoginRequest
 
 loginForm :: Monad m => Form Html m LoginRequest
 loginForm =
-    LoginRequest <$> "name" .: check "No username provided" (not . T.null . T.strip) (text Nothing)
-                 <*> "password" .: check "No password provided" (not . T.null . T.strip) (text Nothing)
+    LoginRequest <$> "name" .: usernameFormlet Nothing
+                 <*> "password" .: passwordFormlet Nothing
 
 loginFormSpec :: FormMeta
 loginFormSpec =

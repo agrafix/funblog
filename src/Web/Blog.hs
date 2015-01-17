@@ -6,17 +6,16 @@ import Model.CoreTypes
 import Model.ResponseTypes
 import Web.Actions.User
 import Web.Forms.Login
+import Web.Forms.Register
 import Web.Utils
 import Web.Views.Home
-import Web.Views.Login
 import Web.Views.Site
 
 import Control.Monad.Logger
-import Control.Monad.Trans.Resource
 import Data.Monoid
 import Database.Persist.Sqlite hiding (get)
 import Network.Wai.Middleware.Static
-import Text.Blaze.Html (Html)
+import Text.Blaze.Html (Html, toHtml)
 import Text.Digestive.Bootstrap (renderForm)
 import Web.Spock.Digestive
 import Web.Spock.Safe hiding (SessionId)
@@ -65,25 +64,21 @@ runBlog bcfg =
           , sc_persistCfg = Nothing
           }
 
-runSQL :: (HasSpock m, SpockConn m ~ SqlBackend) => SqlPersistT (NoLoggingT (ResourceT IO)) a -> m a
-runSQL action =
-    runQuery $ \conn ->
-        runResourceT $ runNoLoggingT $ runSqlConn action conn
-
-mkSite :: Maybe User -> (SiteView -> Html) -> BlogAction ()
-mkSite mUser content =
+mkSite :: (SiteView -> Html) -> BlogAction a
+mkSite content =
+    maybeUser $ \mUser ->
     do blogSt <- getState
        let cfg = bs_cfg blogSt
            sv =
                SiteView
                { sv_blogName = bcfg_name cfg
                , sv_blogDesc = bcfg_desc cfg
-               , sv_user = mUser
+               , sv_user = fmap snd mUser
                }
        blaze $ siteView sv (content sv)
 
-mkSite' :: Maybe User -> Html -> BlogAction ()
-mkSite' mUser content = mkSite mUser (const content)
+mkSite' :: Html -> BlogAction a
+mkSite' content = mkSite (const content)
 
 getpost url action =
     do get url action
@@ -93,45 +88,83 @@ blogApp :: BlogApp
 blogApp =
     do middleware (staticPolicy (addBase "static"))
        get "/" $
-           mkSite Nothing (\sv -> homeView sv)
+           mkSite (\sv -> homeView sv)
+       get "/about" $
+           mkSite mempty
+       get "/manage" $ requireUser $ requireRights [userIsAdmin] $ \_ ->
+           mkSite mempty
+       get "/write" $ requireUser $ requireRights [userIsAdmin, userIsAuthor] $ \_ ->
+           mkSite mempty
        getpost "/login" $
            do f <- runForm "loginForm" loginForm
+              let formView mErr view =
+                      panelWithErrorView "Login" mErr $ renderForm loginFormSpec view
               case f of
                 (view, Nothing) ->
-                    mkSite' Nothing (loginView Nothing $ renderForm loginFormSpec view)
+                    mkSite' (formView Nothing view)
                 (view, Just loginReq) ->
-                    do loginRes <- runSQL $ loginUser (lr_user loginReq) (lr_password loginReq)
+                    do loginRes <-
+                           runSQL $ loginUser (lr_user loginReq) (lr_password loginReq)
                        case loginRes of
                          Just userId ->
                              do sid <- runSQL $ createSession userId
                                 writeSession (Just sid)
                                 redirect "/"
                          Nothing ->
-                             mkSite' Nothing (loginView (Just "Invalid login credentials!") $ renderForm loginFormSpec view)
-       get "/about" $
-           mkSite Nothing mempty
-       post "/register" $
-            do Just username <- param "username"
-               Just email <- param "email"
-               Just password <- param "password"
-               (runSQL $ registerUser username email password) >>= json
+                             mkSite' (formView (Just "Invalid login credentials!") view)
+       getpost "/register" $
+            do f <- runForm "registerForm" registerForm
+               let formView mErr view =
+                       panelWithErrorView "Register" mErr $ renderForm registerFormSpec view
+               case f of
+                 (view, Nothing) ->
+                     mkSite' (formView Nothing view)
+                 (view, Just registerReq) ->
+                     if rr_password registerReq /= rr_passwordConfirm registerReq
+                     then mkSite' (formView (Just "Passwords do not match") view)
+                     else do registerRes <-
+                                 runSQL $ registerUser (rr_username registerReq) (rr_email registerReq) (rr_password registerReq)
+                             case registerRes of
+                               CommonError errMsg ->
+                                   mkSite' (formView (Just errMsg) view)
+                               CommonSuccess _ ->
+                                   mkSite' (panelWithErrorView "Register - Success!" Nothing $ "Great! You may now login.")
        get "/logout" $ requireUser $ \(userId, _) ->
            do runSQL $ killSessions userId
               writeSession Nothing
               redirect "/"
 
-requireUser :: ((UserId, User) -> BlogAction a) -> BlogAction a
-requireUser action =
+requireRights :: [User -> Bool] -> ((UserId, User) -> BlogAction a) -> (UserId, User) -> BlogAction a
+requireRights rights action u@(_, user) =
+    if or $ map (\f -> f user) rights
+    then action u
+    else noAccessPage "You don't have enough rights, sorry."
+
+noAccessPage :: T.Text -> BlogAction a
+noAccessPage msg =
+    do setStatus Http.status403
+       prefResp <- preferredFormat
+       case prefResp of
+         PrefJSON ->
+             json (CommonError msg)
+         _ ->
+             mkSite' (panelWithErrorView "No Access" Nothing (toHtml msg))
+
+maybeUser :: (Maybe (UserId, User) -> BlogAction a) -> BlogAction a
+maybeUser action =
     do sess <- readSession
        case sess of
          Nothing ->
-             do setStatus Http.status403
-                json (CommonError "Not logged in")
+             action Nothing
          Just sid ->
              do mUser <- runSQL $ loadUser sid
-                case mUser of
-                  Nothing ->
-                      do setStatus Http.status403
-                         json (CommonError "Invalid user")
-                  Just userTuple ->
-                      action userTuple
+                action mUser
+
+requireUser :: ((UserId, User) -> BlogAction a) -> BlogAction a
+requireUser action =
+    maybeUser $ \mUser ->
+    case mUser of
+      Nothing ->
+          noAccessPage "Please login first"
+      Just userTuple ->
+          action userTuple
