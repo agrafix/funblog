@@ -16,7 +16,7 @@ use the web framework [Spock](http://github.com/agrafix/Spock). It
 * Using a database
 * Session management
 * Background-Workers
-* Authentification
+* Authentication
 
 This repository also provides the material for my upcoming talk at
 [BobKonf 2015 Berlin](http://bobkonf.de/2015/thiemann.html) (German).
