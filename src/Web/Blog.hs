@@ -7,6 +7,7 @@ import Model.ResponseTypes
 import Web.Actions.User
 import Web.Forms.Login
 import Web.Forms.Register
+import Web.Forms.Post
 import Web.Utils
 import Web.Views.Home
 import Web.Views.Site
@@ -62,6 +63,7 @@ runBlog bcfg =
           , sc_sessionIdEntropy = 40
           , sc_emptySession = Nothing
           , sc_persistCfg = Nothing
+          , sc_sessionExpandTTL = True
           }
 
 mkSite :: (SiteView -> Html) -> BlogAction a
@@ -93,13 +95,20 @@ blogApp =
            mkSite mempty
        get "/manage" $ requireUser $ requireRights [userIsAdmin] $ \_ ->
            mkSite mempty
-       get "/write" $ requireUser $ requireRights [userIsAdmin, userIsAuthor] $ \_ ->
-           mkSite mempty
+       getpost "/write" $ requireUser $ \_ ->
+           do f <- runForm "writePost" postForm
+              let formView mErr view =
+                      panelWithErrorView "Write a Post" mErr $ (renderForm postFormSpec view)
+              case f of
+                (view, Nothing) ->
+                    mkSite' (formView Nothing view)
+                (view, Just newPost) ->
+                    error "Not implemented"
        getpost "/login" $
            do f <- runForm "loginForm" loginForm
               let formView mErr view =
-                      panelWithErrorView "Login" mErr $ renderForm loginFormSpec view
-              case f of
+                      panelWithErrorView "Login" mErr $ (renderForm loginFormSpec view)
+              case f of -- (View, Maybe LoginRequest)
                 (view, Nothing) ->
                     mkSite' (formView Nothing view)
                 (view, Just loginReq) ->
