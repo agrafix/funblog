@@ -4,8 +4,8 @@ module Web.Views.Home where
 import Model.CoreTypes
 import Web.Views.Site (SiteView(..))
 
-import Database.Persist
 import Control.Monad
+import Database.Persist
 import Text.Blaze.XHtml5 ((!))
 import qualified Text.Blaze.XHtml5 as H
 import qualified Text.Blaze.XHtml5.Attributes as A

@@ -10,17 +10,17 @@ import Model.CoreTypes
 import Model.ResponseTypes
 import Web.Actions.User
 import Web.Forms.Login
-import Web.Forms.Register
 import Web.Forms.Post
+import Web.Forms.Register
 import Web.Utils
 import Web.Views.Home
 import Web.Views.Site
 
 import Control.Monad
+import Control.Monad.Logger
 import Control.Monad.Trans
 import Data.HVect
 import Data.Time
-import Control.Monad.Logger
 import Database.Persist.Sqlite hiding (get)
 import Network.Wai.Middleware.Static
 import Text.Blaze.Html (Html, toHtml)
