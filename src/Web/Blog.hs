@@ -17,7 +17,9 @@ import Web.Views.Home
 import Web.Views.Site
 
 import Control.Monad
+import Control.Monad.Trans
 import Data.HVect
+import Data.Time
 import Control.Monad.Logger
 import Database.Persist.Sqlite hiding (get)
 import Network.Wai.Middleware.Static
@@ -85,7 +87,8 @@ blogApp =
     prehook baseHook $
     do middleware (staticPolicy (addBase "static"))
        get "/" $
-           mkSite homeView
+           do allPosts <- runSQL $ selectList [] [Desc PostDate]
+              mkSite (homeView allPosts)
        get "/about" $
            mkSite mempty
        prehook guestOnlyHook $
@@ -93,7 +96,8 @@ blogApp =
                   getpost "/login" loginAction
        prehook authHook $
                do get "/logout" logoutAction
-                  getpost "/write" writeAction
+                  prehook authorHook $
+                      getpost "/write" writeAction
                   prehook adminHook $
                       get "/manage" manageAction
 
@@ -133,21 +137,23 @@ registerAction =
                        CommonError errMsg ->
                            mkSite' (formView (Just errMsg) view)
                        CommonSuccess _ ->
-                           mkSite' (panelWithErrorView "Register - Success!" Nothing $ "Great! You may now login.")
+                           mkSite' (panelWithErrorView "Register - Success!" Nothing "Great! You may now login.")
 
 manageAction :: ListContains n IsAdmin xs => BlogAction (HVect xs) a
 manageAction = mkSite mempty
 
-writeAction :: ListContains n (UserId, User) xs => BlogAction (HVect xs) a
+writeAction :: (ListContains n IsAuthor xs, ListContains m (UserId, User) xs) => BlogAction (HVect xs) a
 writeAction =
-    do f <- runForm "writePost" postForm
+    do now <- liftIO getCurrentTime
+       f <- runForm "writePost" (postForm now)
        let formView mErr view =
                panelWithErrorView "Write a Post" mErr $ renderForm postFormSpec view
        case f of
          (view, Nothing) ->
              mkSite' (formView Nothing view)
-         (_view, Just _newPost) ->
-             error "Not implemented"
+         (_, Just newPost) ->
+             do _ <- runSQL $ insert newPost
+                mkSite' (panelWithErrorView "Post - Success!" Nothing "Thanks for the post! You can now see it on the home page")
 
 logoutAction :: ListContains n (UserId, User) xs => BlogAction (HVect xs) a
 logoutAction =
@@ -176,6 +182,14 @@ adminHook =
     do (_ :: UserId, user) <- liftM findFirst getContext
        oldCtx <- getContext
        if userIsAdmin user then return (IsAdmin :&: oldCtx) else noAccessPage "You don't have enough rights, sorry"
+
+data IsAuthor = IsAuthor
+
+authorHook :: ListContains n (UserId, User) xs => BlogAction (HVect xs) (HVect (IsAuthor ': xs))
+authorHook =
+    do (_ :: UserId, user) <- liftM findFirst getContext
+       oldCtx <- getContext
+       if userIsAuthor user then return (IsAuthor :&: oldCtx) else noAccessPage "You don't have enough rights, sorry"
 
 data IsGuest = IsGuest
 
