@@ -1,0 +1,13 @@
+flags: {}
+packages:
+- '.'
+- location: ../Spock
+  extra-dep: true
+- location: ../blaze-bootstrap
+  extra-dep: true
+- location: ../digestive-bootstrap
+  extra-dep: true
+extra-deps:
+- reroute-0.3.1.0
+- digestive-functors-blaze-0.6.0.6
+resolver: lts-3.0

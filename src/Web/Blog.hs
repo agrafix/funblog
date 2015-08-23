@@ -13,7 +13,6 @@ import Web.Views.Home
 import Web.Views.Site
 
 import Control.Monad.Logger
-import Data.Monoid
 import Database.Persist.Sqlite hiding (get)
 import Network.Wai.Middleware.Static
 import Text.Blaze.Html (Html, toHtml)
@@ -54,17 +53,10 @@ runBlog :: BlogCfg -> IO ()
 runBlog bcfg =
     do pool <- runNoLoggingT $ createSqlitePool (bcfg_db bcfg) 5
        runNoLoggingT $ runSqlPool (runMigration migrateCore) pool
-       runSpock (bcfg_port bcfg) $ spock sessCfg (PCPool pool) (BlogState bcfg) blogApp
+       runSpock (bcfg_port bcfg) $ spock (spockCfg pool) blogApp
     where
-      sessCfg =
-          SessionCfg
-          { sc_cookieName = "funblog"
-          , sc_sessionTTL = 5 * 60 * 50
-          , sc_sessionIdEntropy = 40
-          , sc_emptySession = Nothing
-          , sc_persistCfg = Nothing
-          , sc_sessionExpandTTL = True
-          }
+      spockCfg pool =
+          defaultSpockCfg Nothing (PCPool pool) (BlogState bcfg)
 
 mkSite :: (SiteView -> Html) -> BlogAction a
 mkSite content =
@@ -82,15 +74,11 @@ mkSite content =
 mkSite' :: Html -> BlogAction a
 mkSite' content = mkSite (const content)
 
-getpost url action =
-    do get url action
-       post url action
-
 blogApp :: BlogApp
 blogApp =
     do middleware (staticPolicy (addBase "static"))
        get "/" $
-           mkSite (\sv -> homeView sv)
+           mkSite homeView
        get "/about" $
            mkSite mempty
        get "/manage" $ requireUser $ requireRights [userIsAdmin] $ \_ ->
@@ -98,16 +86,16 @@ blogApp =
        getpost "/write" $ requireUser $ \_ ->
            do f <- runForm "writePost" postForm
               let formView mErr view =
-                      panelWithErrorView "Write a Post" mErr $ (renderForm postFormSpec view)
+                      panelWithErrorView "Write a Post" mErr $ renderForm postFormSpec view
               case f of
                 (view, Nothing) ->
                     mkSite' (formView Nothing view)
-                (view, Just newPost) ->
+                (_view, Just _newPost) ->
                     error "Not implemented"
        getpost "/login" $
            do f <- runForm "loginForm" loginForm
               let formView mErr view =
-                      panelWithErrorView "Login" mErr $ (renderForm loginFormSpec view)
+                      panelWithErrorView "Login" mErr $ renderForm loginFormSpec view
               case f of -- (View, Maybe LoginRequest)
                 (view, Nothing) ->
                     mkSite' (formView Nothing view)
@@ -145,7 +133,7 @@ blogApp =
 
 requireRights :: [User -> Bool] -> ((UserId, User) -> BlogAction a) -> (UserId, User) -> BlogAction a
 requireRights rights action u@(_, user) =
-    if or $ map (\f -> f user) rights
+    if any (\f -> f user) rights
     then action u
     else noAccessPage "You don't have enough rights, sorry."
 

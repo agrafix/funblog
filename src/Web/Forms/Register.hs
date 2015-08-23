@@ -3,7 +3,6 @@ module Web.Forms.Register where
 
 import Web.Forms.Common
 
-import Control.Applicative
 import Text.Blaze.Html (Html)
 import Text.Digestive
 import Text.Digestive.Bootstrap

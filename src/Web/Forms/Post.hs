@@ -3,11 +3,9 @@ module Web.Forms.Post where
 
 import Model.CoreTypes
 
-import Control.Applicative
 import Text.Blaze.Html (Html)
 import Text.Digestive hiding (Post)
 import Text.Digestive.Bootstrap
-import qualified Data.Text as T
 
 postForm :: Monad m => Form Html m Post
 postForm =

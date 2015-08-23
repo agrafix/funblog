@@ -4,7 +4,6 @@ module Web.Views.Site where
 import Model.CoreTypes
 
 import Control.Monad
-import Data.Monoid
 import Text.Blaze.XHtml5 ((!))
 import qualified Data.Text as T
 import qualified Text.Blaze.Bootstrap as H
