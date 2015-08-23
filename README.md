@@ -1,9 +1,30 @@
 funblog
-=======
+=====
 
 [![Build Status](https://travis-ci.org/agrafix/funblog.svg)](https://travis-ci.org/agrafix/funblog)
 
-# Intro
+
+## Intro
+
+
+Blog written in Haskell
+
+## Cli Usage: funblog
+
+```sh
+$ funblog --help
+Usage: funblog
+
+Configure using the blog.cfg file
+
+```
+
+## Install
+
+* From Source (cabal): `git clone https://github.com/agrafix/funblog.git && cd funblog && cabal install`
+* From Source (stack): `git clone https://github.com/agrafix/funblog.git && cd funblog && stack build`
+
+# About funblog
 
 This is a simple blog software written in Haskell to demonstrate how to
 use the web framework [Spock](http://github.com/agrafix/Spock). It
@@ -17,30 +38,27 @@ use the web framework [Spock](http://github.com/agrafix/Spock). It
 * Session management
 * Background-Workers
 * Authentication
+* Spock Contexts
 
-This repository also provides the material for my upcoming talk at
+This repository also provided the material for my talk at
 [BobKonf 2015 Berlin](http://bobkonf.de/2015/thiemann.html) (German).
 
-# Setup
+# Quickstart
 
 1. Clone the github repository
-2. Run `cabal install --only-dependencies`
-3. Run `cabal build`
-4. Adjust `blog.cfg`
-5. Run `dist/build/funblog/funblog`
+2. Run `stack install`
+3. Adjust `blog.cfg`
+4. Run `funblog`
 
-# License
+Please not that this software is NOT intendet to be used in production (yet?).
 
-Copyright 2014 - 2015 Alexander Thiemann
+## Misc
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+### Supported GHC Versions
 
-       http://www.apache.org/licenses/LICENSE-2.0
+* 7.10.2
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+### License
+
+Released under the Apache-2.0 license.
+(c) 2014 - 2015 Alexander Thiemann
