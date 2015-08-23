@@ -3,9 +3,13 @@ packages:
 - '.'
 - location: ../Spock
   extra-dep: true
+- location: ../Spock-digestive
+  extra-dep: true
 - location: ../blaze-bootstrap
   extra-dep: true
 - location: ../digestive-bootstrap
+  extra-dep: true
+- location: ../hvect
   extra-dep: true
 extra-deps:
 - reroute-0.3.1.0

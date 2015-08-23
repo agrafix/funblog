@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Web.Blog where
 
 import Model.CoreTypes
@@ -12,6 +16,8 @@ import Web.Utils
 import Web.Views.Home
 import Web.Views.Site
 
+import Control.Monad
+import Data.HVect
 import Control.Monad.Logger
 import Database.Persist.Sqlite hiding (get)
 import Network.Wai.Middleware.Static
@@ -24,8 +30,8 @@ import qualified Data.Text as T
 import qualified Network.HTTP.Types.Status as Http
 
 type SessionVal = Maybe SessionId
-type BlogApp = SpockM SqlBackend SessionVal BlogState ()
-type BlogAction a = SpockAction SqlBackend SessionVal BlogState a
+type BlogApp ctx = SpockCtxM ctx SqlBackend SessionVal BlogState ()
+type BlogAction ctx a = SpockActionCtx ctx SqlBackend SessionVal BlogState a
 
 data BlogState
    = BlogState
@@ -58,7 +64,7 @@ runBlog bcfg =
       spockCfg pool =
           defaultSpockCfg Nothing (PCPool pool) (BlogState bcfg)
 
-mkSite :: (SiteView -> Html) -> BlogAction a
+mkSite :: (SiteView -> Html) -> BlogAction ctx a
 mkSite content =
     maybeUser $ \mUser ->
     do blogSt <- getState
@@ -71,73 +77,117 @@ mkSite content =
                }
        blaze $ siteView sv (content sv)
 
-mkSite' :: Html -> BlogAction a
+mkSite' :: Html -> BlogAction ctx a
 mkSite' content = mkSite (const content)
 
-blogApp :: BlogApp
+blogApp :: BlogApp ()
 blogApp =
+    prehook baseHook $
     do middleware (staticPolicy (addBase "static"))
        get "/" $
            mkSite homeView
        get "/about" $
            mkSite mempty
-       get "/manage" $ requireUser $ requireRights [userIsAdmin] $ \_ ->
-           mkSite mempty
-       getpost "/write" $ requireUser $ \_ ->
-           do f <- runForm "writePost" postForm
-              let formView mErr view =
-                      panelWithErrorView "Write a Post" mErr $ renderForm postFormSpec view
-              case f of
-                (view, Nothing) ->
-                    mkSite' (formView Nothing view)
-                (_view, Just _newPost) ->
-                    error "Not implemented"
-       getpost "/login" $
-           do f <- runForm "loginForm" loginForm
-              let formView mErr view =
-                      panelWithErrorView "Login" mErr $ renderForm loginFormSpec view
-              case f of -- (View, Maybe LoginRequest)
-                (view, Nothing) ->
-                    mkSite' (formView Nothing view)
-                (view, Just loginReq) ->
-                    do loginRes <-
-                           runSQL $ loginUser (lr_user loginReq) (lr_password loginReq)
-                       case loginRes of
-                         Just userId ->
-                             do sid <- runSQL $ createSession userId
-                                writeSession (Just sid)
-                                redirect "/"
-                         Nothing ->
-                             mkSite' (formView (Just "Invalid login credentials!") view)
-       getpost "/register" $
-            do f <- runForm "registerForm" registerForm
-               let formView mErr view =
-                       panelWithErrorView "Register" mErr $ renderForm registerFormSpec view
-               case f of
-                 (view, Nothing) ->
-                     mkSite' (formView Nothing view)
-                 (view, Just registerReq) ->
-                     if rr_password registerReq /= rr_passwordConfirm registerReq
-                     then mkSite' (formView (Just "Passwords do not match") view)
-                     else do registerRes <-
-                                 runSQL $ registerUser (rr_username registerReq) (rr_email registerReq) (rr_password registerReq)
-                             case registerRes of
-                               CommonError errMsg ->
-                                   mkSite' (formView (Just errMsg) view)
-                               CommonSuccess _ ->
-                                   mkSite' (panelWithErrorView "Register - Success!" Nothing $ "Great! You may now login.")
-       get "/logout" $ requireUser $ \(userId, _) ->
-           do runSQL $ killSessions userId
-              writeSession Nothing
-              redirect "/"
+       prehook guestOnlyHook $
+               do getpost "/register" registerAction
+                  getpost "/login" loginAction
+       prehook authHook $
+               do get "/logout" logoutAction
+                  getpost "/write" writeAction
+                  prehook adminHook $
+                      get "/manage" manageAction
 
-requireRights :: [User -> Bool] -> ((UserId, User) -> BlogAction a) -> (UserId, User) -> BlogAction a
-requireRights rights action u@(_, user) =
-    if any (\f -> f user) rights
-    then action u
-    else noAccessPage "You don't have enough rights, sorry."
+loginAction :: (ListContains n IsGuest xs, NotInList (UserId, User) xs ~ 'True) => BlogAction (HVect xs) a
+loginAction =
+    do f <- runForm "loginForm" loginForm
+       let formView mErr view =
+               panelWithErrorView "Login" mErr $ renderForm loginFormSpec view
+       case f of -- (View, Maybe LoginRequest)
+         (view, Nothing) ->
+             mkSite' (formView Nothing view)
+         (view, Just loginReq) ->
+             do loginRes <-
+                    runSQL $ loginUser (lr_user loginReq) (lr_password loginReq)
+                case loginRes of
+                  Just userId ->
+                      do sid <- runSQL $ createSession userId
+                         writeSession (Just sid)
+                         redirect "/"
+                  Nothing ->
+                      mkSite' (formView (Just "Invalid login credentials!") view)
 
-noAccessPage :: T.Text -> BlogAction a
+registerAction :: (ListContains n IsGuest xs, NotInList (UserId, User) xs ~ 'True) => BlogAction (HVect xs) a
+registerAction =
+    do f <- runForm "registerForm" registerForm
+       let formView mErr view =
+               panelWithErrorView "Register" mErr $ renderForm registerFormSpec view
+       case f of
+         (view, Nothing) ->
+             mkSite' (formView Nothing view)
+         (view, Just registerReq) ->
+             if rr_password registerReq /= rr_passwordConfirm registerReq
+             then mkSite' (formView (Just "Passwords do not match") view)
+             else do registerRes <-
+                         runSQL $ registerUser (rr_username registerReq) (rr_email registerReq) (rr_password registerReq)
+                     case registerRes of
+                       CommonError errMsg ->
+                           mkSite' (formView (Just errMsg) view)
+                       CommonSuccess _ ->
+                           mkSite' (panelWithErrorView "Register - Success!" Nothing $ "Great! You may now login.")
+
+manageAction :: ListContains n IsAdmin xs => BlogAction (HVect xs) a
+manageAction = mkSite mempty
+
+writeAction :: ListContains n (UserId, User) xs => BlogAction (HVect xs) a
+writeAction =
+    do f <- runForm "writePost" postForm
+       let formView mErr view =
+               panelWithErrorView "Write a Post" mErr $ renderForm postFormSpec view
+       case f of
+         (view, Nothing) ->
+             mkSite' (formView Nothing view)
+         (_view, Just _newPost) ->
+             error "Not implemented"
+
+logoutAction :: ListContains n (UserId, User) xs => BlogAction (HVect xs) a
+logoutAction =
+    do (userId, _ :: User) <- liftM findFirst getContext
+       runSQL $ killSessions userId
+       writeSession Nothing
+       redirect "/"
+
+baseHook :: BlogAction () (HVect '[])
+baseHook = return HNil
+
+authHook :: BlogAction (HVect xs) (HVect ((UserId, User) ': xs))
+authHook =
+    maybeUser $ \mUser ->
+    do oldCtx <- getContext
+       case mUser of
+         Nothing ->
+             noAccessPage "Unknown user. Login first!"
+         Just val ->
+             return (val :&: oldCtx)
+
+data IsAdmin = IsAdmin
+
+adminHook :: ListContains n (UserId, User) xs => BlogAction (HVect xs) (HVect (IsAdmin ': xs))
+adminHook =
+    do (_ :: UserId, user) <- liftM findFirst getContext
+       oldCtx <- getContext
+       if userIsAdmin user then return (IsAdmin :&: oldCtx) else noAccessPage "You don't have enough rights, sorry"
+
+data IsGuest = IsGuest
+
+guestOnlyHook :: BlogAction (HVect xs) (HVect (IsGuest ': xs))
+guestOnlyHook =
+    maybeUser $ \mUser ->
+    do oldCtx <- getContext
+       case mUser of
+         Nothing -> return (IsGuest :&: oldCtx)
+         Just _ -> redirect "/"
+
+noAccessPage :: T.Text -> BlogAction ctx a
 noAccessPage msg =
     do setStatus Http.status403
        prefResp <- preferredFormat
@@ -147,7 +197,7 @@ noAccessPage msg =
          _ ->
              mkSite' (panelWithErrorView "No Access" Nothing (toHtml msg))
 
-maybeUser :: (Maybe (UserId, User) -> BlogAction a) -> BlogAction a
+maybeUser :: (Maybe (UserId, User) -> BlogAction ctx a) -> BlogAction ctx a
 maybeUser action =
     do sess <- readSession
        case sess of
@@ -156,12 +206,3 @@ maybeUser action =
          Just sid ->
              do mUser <- runSQL $ loadUser sid
                 action mUser
-
-requireUser :: ((UserId, User) -> BlogAction a) -> BlogAction a
-requireUser action =
-    maybeUser $ \mUser ->
-    case mUser of
-      Nothing ->
-          noAccessPage "Please login first"
-      Just userTuple ->
-          action userTuple

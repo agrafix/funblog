@@ -13,7 +13,7 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
-blaze :: MonadIO m => Html -> ActionT m a
+blaze :: MonadIO m => Html -> ActionCtxT ctx m a
 blaze = lazyBytes . renderHtml
 {-# INLINE blaze #-}
 
