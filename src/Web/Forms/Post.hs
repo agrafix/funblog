@@ -19,9 +19,9 @@ postFormSpec =
     { fm_method = POST
     , fm_target = "/write"
     , fm_elements =
-        [ FormElement "title" (Just "Titel") InputText
-        , FormElement "date" (Just "Datum") InputText
-        , FormElement "content" (Just "Inhalt") $ InputTextArea (Just 30) (Just 10)
+        [ FormElement "title" (Just "Title") InputText
+        , FormElement "date" (Just "Date") InputText
+        , FormElement "content" (Just "Content") $ InputTextArea (Just 30) (Just 10)
         ]
     , fm_submitText = "Publish"
     }
