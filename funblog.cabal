@@ -14,9 +14,29 @@ cabal-version:       >=1.10
 tested-with:         GHC==7.10.2
 extra-source-files:
     README.md
+    static/css/blog.css
+    static/css/bootstrap-theme.min.css
+    static/css/bootstrap.min.css
+    static/fonts/glyphicons-halflings-regular.eot
+    static/fonts/glyphicons-halflings-regular.svg
+    static/fonts/glyphicons-halflings-regular.ttf
+    static/fonts/glyphicons-halflings-regular.woff
+    static/js/bootstrap.min.js
 
 executable funblog
   main-is:             Bootstrap.hs
+  other-modules:
+                       Model.CoreTypes
+                       Model.ResponseTypes
+                       Web.Actions.User
+                       Web.Blog
+                       Web.Forms.Common
+                       Web.Forms.Login
+                       Web.Forms.Post
+                       Web.Forms.Register
+                       Web.Utils
+                       Web.Views.Home
+                       Web.Views.Site
   build-depends:
                        Spock >=0.9,
                        Spock-digestive >=0.2,
