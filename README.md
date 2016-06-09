@@ -50,7 +50,7 @@ This repository also provided the material for my talk at
 3. Adjust `blog.cfg`
 4. Run `funblog`
 
-Please not that this software is NOT intendet to be used in production (yet?).
+Please note that this software is NOT intendet to be used in production (yet?).
 
 ## Misc
 
