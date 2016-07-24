@@ -1,12 +1,18 @@
 flags: {}
 packages:
 - '.'
+- location:
+      git: git@github.com:agrafix/Spock
+      commit: 2c60a48b2c0be0768071cc1b3c7f14590ffcc7d6
+  subdirs:
+    - Spock
+    - Spock-core
+    - reroute
+- location:
+      git: git@github.com:agrafix/Spock-digestive
+      commit: 4c85647427e21bbaefbf04c4bc315d4bdfabba0e
 extra-deps:
-- Spock-0.9.0.0
-- Spock-digestive-0.2.0.0
-- hvect-0.3.0.0
 - digestive-bootstrap-0.1.0.1
 - blaze-bootstrap-0.1.0.1
-- reroute-0.3.1.0
 - digestive-functors-blaze-0.6.0.6
-resolver: lts-3.0
+resolver: lts-5.8

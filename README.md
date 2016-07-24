@@ -61,4 +61,4 @@ Please note that this software is NOT intendet to be used in production (yet?).
 ### License
 
 Released under the Apache-2.0 license.
-(c) 2014 - 2015 Alexander Thiemann
+(c) 2014 - 2016 Alexander Thiemann

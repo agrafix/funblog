@@ -25,8 +25,9 @@ import Database.Persist.Sqlite hiding (get)
 import Network.Wai.Middleware.Static
 import Text.Blaze.Html (Html, toHtml)
 import Text.Digestive.Bootstrap (renderForm)
+import Web.Spock hiding (SessionId)
+import Web.Spock.Config
 import Web.Spock.Digestive
-import Web.Spock.Safe hiding (SessionId)
 import qualified Data.Configurator as C
 import qualified Data.Text as T
 import qualified Network.HTTP.Types.Status as Http
@@ -61,10 +62,8 @@ runBlog :: BlogCfg -> IO ()
 runBlog bcfg =
     do pool <- runNoLoggingT $ createSqlitePool (bcfg_db bcfg) 5
        runNoLoggingT $ runSqlPool (runMigration migrateCore) pool
-       runSpock (bcfg_port bcfg) $ spock (spockCfg pool) blogApp
-    where
-      spockCfg pool =
-          defaultSpockCfg Nothing (PCPool pool) (BlogState bcfg)
+       spockCfg <- defaultSpockCfg Nothing (PCPool pool) (BlogState bcfg)
+       runSpock (bcfg_port bcfg) $ spock spockCfg blogApp
 
 mkSite :: (SiteView -> Html) -> BlogAction ctx a
 mkSite content =

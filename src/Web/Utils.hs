@@ -7,7 +7,7 @@ import Control.Monad.Trans.Resource
 import Database.Persist.Sql (SqlBackend, SqlPersistT, runSqlConn)
 import Text.Blaze.Html (Html)
 import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
-import Web.Spock.Shared
+import Web.Spock
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.Text as T
