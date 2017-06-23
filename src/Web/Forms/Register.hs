@@ -28,11 +28,18 @@ registerFormSpec =
     FormMeta
     { fm_method = POST
     , fm_target = "/register"
-    , fm_elements =
-        [ FormElement "name" (Just "Username") InputText
-        , FormElement "email" (Just "Email") InputText
-        , FormElement "password1" (Just "Password") InputPassword
-        , FormElement "password2" (Just "Repeat Password") InputPassword
+    , fm_components =
+        [ FCSection
+            FormSection
+            { fs_title = Nothing
+            , fs_help = Nothing
+            , fs_elements =
+                [ FormElement "name" (Just "Username") (Just "Username") InputText
+                , FormElement "email" (Just "Email") (Just "Email") InputText
+                , FormElement "password1" (Just "Password") (Just "Password") InputPassword
+                , FormElement "password2" (Just "Repeat Password") (Just "Repeat Password") InputPassword
+                ]
+            }
         ]
-    , fm_submitText = "Register"
+    , fm_submitValue = "Register"
     }

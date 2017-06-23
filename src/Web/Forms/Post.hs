@@ -19,10 +19,17 @@ postFormSpec =
     FormMeta
     { fm_method = POST
     , fm_target = "/write"
-    , fm_elements =
-        [ FormElement "title" (Just "Title") InputText
-        , FormElement "date" (Just "Date") InputText
-        , FormElement "content" (Just "Content") $ InputTextArea (Just 30) (Just 10)
+    , fm_components =
+        [ FCSection
+            FormSection
+            { fs_title = Nothing
+            , fs_help = Nothing
+            , fs_elements =
+                [ FormElement "title" (Just "Title") (Just "Title") InputText
+                , FormElement "date" (Just "Date") Nothing InputText
+                , FormElement "content" (Just "Content") (Just "Content") $ InputTextArea (Just 30) (Just 10)
+                ]
+            }
         ]
-    , fm_submitText = "Publish"
+    , fm_submitValue = "Publish"
     }
