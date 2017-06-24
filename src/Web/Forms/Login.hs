@@ -24,9 +24,16 @@ loginFormSpec =
     FormMeta
     { fm_method = POST
     , fm_target = "/login"
-    , fm_elements =
-        [ FormElement "name" (Just "Username") InputText
-        , FormElement "password" (Just "Password") InputPassword
+    , fm_components =
+        [ FCSection
+            FormSection
+            { fs_title = Nothing
+            , fs_help = Nothing
+            , fs_elements =
+                [ FormElement "name" (Just "Username") (Just "Username") InputText
+                , FormElement "password" (Just "Password") (Just "Password") InputPassword
+                ]
+            }
         ]
-    , fm_submitText = "Login"
+    , fm_submitValue = "Login"
     }
